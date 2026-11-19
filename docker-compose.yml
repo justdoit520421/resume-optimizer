@@ -1,0 +1,58 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: resume-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-123456}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-resume_optimizer}"
+      TZ: "Asia/Shanghai"
+    ports:
+      - "3306:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: resume-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: resume-backend
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-123456}@mysql:3306/${MYSQL_DATABASE:-resume_optimizer}?charset=utf8mb4"
+      REDIS_URL: "redis://redis:6379/0"
+      LLM_PROVIDER: "${LLM_PROVIDER:-mock}"
+      LLM_API_KEY: "${LLM_API_KEY:-}"
+      LLM_BASE_URL: "${LLM_BASE_URL:-}"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - upload_data:/app/uploads
+
+volumes:
+  mysql_data:
+  upload_data:
